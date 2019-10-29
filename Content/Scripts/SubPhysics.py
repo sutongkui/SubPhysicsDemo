@@ -18,7 +18,9 @@ w_path = 'E:/Github/SubPhysics/data/narray/w.npy'
 alpha_path = 'E:/Github/SubPhysics/data/narray/alpha.npy'
 beta_path = 'E:/Github/SubPhysics/data/narray/beta.npy'
 x_transform_path = 'E:/Github/SubPhysics/data/narray/x_transform.npy'
+y_transform_path = 'E:/Github/SubPhysics/data/narray/y_transform.npy'
 x_mean_path = 'E:/Github/SubPhysics/data/narray/x_mean.npy'
+y_mean_path = 'E:/Github/SubPhysics/data/narray/y_mean.npy'
 
 class DialogException(Exception):
     """
@@ -148,10 +150,12 @@ class Physics:
         # set the mesh as the Sphere asset
         self.sphere_component.import_renderable('E:/Github/SubPhysics/data/obj/simdatacollision.obj')
 
-        self.uobject.set_actor_scale(FVector(200,200,200))
+        self.scale_factor = 200
+        scale = self.scale_factor
+        self.uobject.set_actor_scale(FVector(scale,scale,scale))
         self.uobject.set_actor_rotation(FRotator(-90, 0, 0))
 
-        self.sphere_actor.set_actor_scale(FVector(200,200,200))
+        self.sphere_actor.set_actor_scale(FVector(scale,scale,scale))
         self.sphere_actor.set_actor_rotation(FRotator(-90, 0, 0))
 
         # Load model
@@ -168,6 +172,8 @@ class Physics:
         self.beta = np.load(beta_path)
         self.x_transform_mat = np.load(x_transform_path)
         self.x_mean = np.load(x_mean_path)
+        self.y_transform_mat = np.load(y_transform_path)
+        self.y_mean = np.load(y_mean_path)
 
     # this is called at every 'tick'    
     def tick(self, delta_time):
@@ -181,6 +187,8 @@ class Physics:
         beta = self.beta 
         x_transform_mat = self.x_transform_mat 
         x_mean = self.x_mean
+        y_transform_mat = self.y_transform_mat 
+        y_mean = self.y_mean
 
 
         z_init = alpha * z[t-1, :] + beta * (z[t-1, :] - z[t-2, :])
@@ -194,8 +202,11 @@ class Physics:
         x_recovery = np.matmul(predict, x_transform_mat.T) + x_mean
 
         self.Procedural_mesh.update(x_recovery[0, :].tolist())
-        # w_list = w[t, :].tolist()
-        # self.sphere_component.set_relative_location(FVector(w_list[0], w_list[1], w_list[2]))
+
+        y_recovery = np.matmul(w[t, :], y_transform_mat.T) + y_mean
+        y_list = y_recovery.tolist()
+        scale = self.scale_factor
+        self.sphere_actor.set_actor_location(FVector(y_list[0]*scale, y_list[1]*scale, y_list[2]*scale))
 
         self.t += 1
         a = 1
