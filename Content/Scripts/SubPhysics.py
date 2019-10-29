@@ -131,13 +131,28 @@ class Physics:
         ue.log('Begin Play on class')
         print(tf.__version__)
 
+        #test = self.uobject.actor_create_default_subobject(ProceduralMeshComponent, "Test")
+
         # Load mesh as proceduralmesh
         self.Procedural_mesh = self.uobject.add_actor_root_component(CustomProceduralMeshComponent, 'ProceduralMesh')
         self.Procedural_mesh.import_renderable('E:/Github/SubPhysics/data/obj/simdata.obj')
-        
-        self.Procedural_mesh.set_relative_scale(FVector(200,200,200))
-        self.Procedural_mesh.set_relative_rotation(FRotator(-90, 0, 0))
-        self.Procedural_mesh.set_relative_location(FVector(0,0,0))
+
+
+        # self.sphere = self.uobject.add_actor_component(CustomProceduralMeshComponent, 'Sphere')
+        # self.sphere.import_renderable('E:/Github/SubPhysics/data/obj/simdatacollision.obj')
+
+        # spawn a new PyActor
+        self.sphere_actor = self.uobject.actor_spawn(ue.find_class('PyActor'), FVector(0, 0, 0),FRotator(0, 0, 0))
+        # add a sphere component as the root one
+        self.sphere_component = self.sphere_actor.add_actor_root_component(ue.find_class('CustomProceduralMeshComponent'), 'SphereMesh')
+        # set the mesh as the Sphere asset
+        self.sphere_component.import_renderable('E:/Github/SubPhysics/data/obj/simdatacollision.obj')
+
+        self.uobject.set_actor_scale(FVector(200,200,200))
+        self.uobject.set_actor_rotation(FRotator(-90, 0, 0))
+
+        self.sphere_actor.set_actor_scale(FVector(200,200,200))
+        self.sphere_actor.set_actor_rotation(FRotator(-90, 0, 0))
 
         # Load model
         self.model = keras.models.load_model('E:/Github/SubPhysics/SavedModel/my_model.h5')
@@ -156,7 +171,7 @@ class Physics:
 
     # this is called at every 'tick'    
     def tick(self, delta_time):
-        # self.Procedural_mesh.updateself()
+
 
         model = self.model
         t = self.t
@@ -179,6 +194,8 @@ class Physics:
         x_recovery = np.matmul(predict, x_transform_mat.T) + x_mean
 
         self.Procedural_mesh.update(x_recovery[0, :].tolist())
+        # w_list = w[t, :].tolist()
+        # self.sphere_component.set_relative_location(FVector(w_list[0], w_list[1], w_list[2]))
 
         self.t += 1
         a = 1
