@@ -54,7 +54,7 @@ class Physics:
         self.uobject.bind_key('M', ue.IE_PRESSED, self.you_pressed_M)
 
         self.bSimulation = True
-        self.auto_move_mode = False
+        self.auto_move_mode = True
 
         # Load mesh as proceduralmesh
         self.Procedural_mesh = self.uobject.add_actor_root_component(ProceduralMesh.CustomProceduralMeshComponent, 'ProceduralMesh')
@@ -99,14 +99,26 @@ class Physics:
         self.z_init_last_1 =  self.z[1, :]
         self.sphere_location_last = self.sphere_actor.get_actor_location()
 
+        # for auto move 
+        self.z_last_2_auto =  self.z[0, :]
+        self.z_last_1_auto =  self.z[1, :]
+
+        self.tick_frequency = 5
+        self.elapsed_time = 0.0
+        
+
 
     # this is called at every 'tick'    
     def tick(self, delta_time):
-        if self.auto_move_mode:
-            if self.bSimulation:
-                self.auto_move_update()
-        else:
-            self.interactive_move_update()
+        self.elapsed_time += delta_time
+        if self.elapsed_time > 1.0 / self.tick_frequency:
+            self.elapsed_time = 0.0
+            if self.auto_move_mode:
+                if self.bSimulation:
+                    self.auto_move_update()
+            else:
+                self.interactive_move_update()
+
 
     def auto_move_update(self):
         model = self.model
@@ -120,14 +132,16 @@ class Physics:
         y_transform_mat = self.y_transform_mat 
         y_mean = self.y_mean
 
-
-        z_init = alpha * z[t-1, :] + beta * (z[t-1, :] - z[t-2, :])
-        # print(z_init.shape)
-        input_data = np.hstack((z_init, z[t-1, :], w[t, :]))
+        z_t_1 = self.z_last_1_auto
+        z_t_2 = self.z_last_2_auto
+        # for test, debug
+        sub_w = w[t, :]
+        z_init = alpha * z_t_1 + beta * (z_t_1 - z_t_2)
+        input_data = np.hstack((z_init, z_t_1, sub_w))
         input_batch = np.array([input_data])
         result = model.predict(input_batch)
 
-
+        #  predict 2d cause result is 2D
         predict = z_init + result
         # convert predict to real vertices(3c), got the matrix U(with u_transpose * predict)
         x_recovery = np.matmul(predict, x_transform_mat.T) + x_mean
@@ -136,9 +150,12 @@ class Physics:
 
         y_recovery = np.matmul(w[t, :], y_transform_mat.T) + y_mean
         y_list = y_recovery.tolist()
-        print('y_list: ', y_list)
+        # print('y_list: ', y_list)
         scale = self.scale_factor
         self.sphere_actor.set_actor_location(FVector(y_list[0]*scale, y_list[1]*scale, y_list[2]*scale))
+
+        self.z_last_2_auto = self.z_last_1_auto
+        self.z_last_1_auto = predict[0,:]
 
         self.t += 1
 
@@ -153,8 +170,6 @@ class Physics:
         beta = self.beta 
         z_t_1 = self.z_init_last_1
         z_t_2 = self.z_init_last_2
-
-        
 
 
         # check whether move or not
