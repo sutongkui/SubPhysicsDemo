@@ -26,7 +26,7 @@ x_transform_path = 'E:/Github/SubPhysics/data/narray/x_transform.npy'
 y_transform_path = 'E:/Github/SubPhysics/data/narray/y_transform.npy'
 x_mean_path = 'E:/Github/SubPhysics/data/narray/x_mean.npy'
 y_mean_path = 'E:/Github/SubPhysics/data/narray/y_mean.npy'
-model_path = 'E:/Github/SubPhysics/SavedModel/my_model.h5'
+model_path = 'E:/Github/SubPhysics/SavedModel/my_model_tf13.h5'
 simdatacollision_path = 'E:/Github/SubPhysics/data/obj/simdatacollision.obj'
 simdata_path = 'E:/Github/SubPhysics/data/obj/simdata.obj'
 
@@ -42,7 +42,7 @@ class DialogException(Exception):
 
 # Set t.maxFPS, default is 120
 class Physics:
-
+     
     # this is called on game start
     def begin_play(self):
         ue.log('Begin Play on class')
@@ -54,7 +54,7 @@ class Physics:
         self.uobject.bind_key('M', ue.IE_PRESSED, self.you_pressed_M)
 
         self.bSimulation = True
-        self.auto_move_mode = True
+        self.auto_move_mode = False
 
         # Load mesh as proceduralmesh
         self.Procedural_mesh = self.uobject.add_actor_root_component(ProceduralMesh.CustomProceduralMeshComponent, 'ProceduralMesh')
@@ -136,6 +136,7 @@ class Physics:
 
         y_recovery = np.matmul(w[t, :], y_transform_mat.T) + y_mean
         y_list = y_recovery.tolist()
+        print('y_list: ', y_list)
         scale = self.scale_factor
         self.sphere_actor.set_actor_location(FVector(y_list[0]*scale, y_list[1]*scale, y_list[2]*scale))
 
@@ -153,6 +154,8 @@ class Physics:
         z_t_1 = self.z_init_last_1
         z_t_2 = self.z_init_last_2
 
+        
+
 
         # check whether move or not
         location = self.sphere_actor.get_actor_location()
@@ -164,12 +167,11 @@ class Physics:
         real_location = np.array([location.x/scale, location.y/scale, location.z/scale]) 
         w = real_location.reshape((1,3))
         sub_w = np.matmul((w - y_mean), y_transform_mat)
+        print('w: ', w)
 
 
         
         z_init = alpha * z_t_1 + beta * (z_t_1 - z_t_2)
-        print('z_init:',z_init.shape)
-        print('sub_w:',sub_w[0,:].shape)
         input_data = np.hstack((z_init, z_t_1, sub_w[0,:]))
         input_batch = np.array([input_data])
         result = model.predict(input_batch)
