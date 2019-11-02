@@ -59,7 +59,6 @@ class Physics:
         # Load mesh as proceduralmesh
         self.Procedural_mesh = self.uobject.add_actor_root_component(ProceduralMesh.CustomProceduralMeshComponent, 'ProceduralMesh')
         self.Procedural_mesh.import_renderable(simdata_path)
-        # self.Procedural_mesh.import_renderable('C:/Users/tongkuisu/Desktop/bunnywithnormal.obj')
 
         # spawn a new PyActor
         self.sphere_actor = self.uobject.actor_spawn(ue.find_class('PyActor'), FVector(0, 0, 0),FRotator(0, 0, 0))
@@ -78,14 +77,12 @@ class Physics:
         self.sphere_actor.set_actor_rotation(FRotator(-90, 0, 0))
         self.sphere_actor.set_actor_location(FVector(0, 0, 0))
 
-        # # Load model
+        # Load model
         self.model = keras.models.load_model(model_path)
         self.model.summary()
 
-        # select t=2, make sure t >= 2
-        # input data for model [/zt;zt-1;wt]
-        self.t = 0+2
 
+        # Load paras
         self.z = np.load(z_path)
         self.w = np.load(w_path)
         self.alpha = np.load(alpha_path)
@@ -99,11 +96,15 @@ class Physics:
         self.z_init_last_1 =  self.z[1, :]
         self.sphere_location_last = self.sphere_actor.get_actor_location()
 
+        # select t=2, make sure t >= 2
+        # input data for model [/zt;zt-1;wt]
+        self.t = 0+2
         # for auto move 
-        self.z_last_2_auto =  self.z[0, :]
-        self.z_last_1_auto =  self.z[1, :]
+        self.z_last_2_auto =  self.z[self.t-2, :]
+        self.z_last_1_auto =  self.z[self.t-1, :]
 
-        self.tick_frequency = 5
+
+        self.tick_frequency = 100
         self.elapsed_time = 0.0
         
 
@@ -121,21 +122,67 @@ class Physics:
 
 
     def auto_move_update(self):
-        model = self.model
+        
         t = self.t
-        z = self.z
         w = self.w
-        alpha = self.alpha 
-        beta = self.beta 
-        x_transform_mat = self.x_transform_mat 
-        x_mean = self.x_mean
-        y_transform_mat = self.y_transform_mat 
-        y_mean = self.y_mean
 
         z_t_1 = self.z_last_1_auto
         z_t_2 = self.z_last_2_auto
-        # for test, debug
         sub_w = w[t, :]
+
+        #  model prediction and update mesh
+        predict, x_recovery = self.model_predict(z_t_2, z_t_1, sub_w)
+        self.Procedural_mesh.update(x_recovery.tolist())
+
+        #  update sphere transform(location)
+        y_transform_mat = self.y_transform_mat 
+        y_mean = self.y_mean
+        y_recovery = np.matmul(sub_w, y_transform_mat.T) + y_mean
+        y_list = y_recovery.tolist()
+        scale = self.scale_factor
+        self.sphere_actor.set_actor_location(FVector(y_list[0]*scale, y_list[1]*scale, y_list[2]*scale))
+
+        self.z_last_2_auto = self.z_last_1_auto
+        self.z_last_1_auto = predict
+        self.t += 1
+
+    def interactive_move_update(self):
+        scale = self.scale_factor
+        y_mean = self.y_mean
+        y_transform_mat = self.y_transform_mat 
+
+        z_t_1 = self.z_init_last_1
+        z_t_2 = self.z_init_last_2
+
+        # check whether move or not
+        location = self.sphere_actor.get_actor_location()
+        dist_vec = location - self.sphere_location_last
+        if dist_vec.x ** 2 + dist_vec.y ** 2 + dist_vec.z ** 2 < 0.1:
+            return
+
+        # apply PCA
+        self.sphere_location_last = location
+        real_location = np.array([location.x/scale, location.y/scale, location.z/scale]) 
+        w = real_location.reshape((1,3))
+        tem_w = np.matmul((w - y_mean), y_transform_mat)
+        sub_w = tem_w[0,:]
+        
+        #  model prediction and update mesh
+        predict, x_recovery = self.model_predict(z_t_2, z_t_1, sub_w)
+        self.Procedural_mesh.update(x_recovery.tolist())
+
+        self.z_init_last_2 = self.z_init_last_1
+        self.z_init_last_1 = predict
+        
+        print(location)
+
+    def model_predict(self, z_t_2, z_t_1, sub_w):
+        x_transform_mat = self.x_transform_mat 
+        x_mean = self.x_mean
+        alpha = self.alpha 
+        beta = self.beta
+        model = self.model 
+
         z_init = alpha * z_t_1 + beta * (z_t_1 - z_t_2)
         input_data = np.hstack((z_init, z_t_1, sub_w))
         input_batch = np.array([input_data])
@@ -145,64 +192,7 @@ class Physics:
         predict = z_init + result
         # convert predict to real vertices(3c), got the matrix U(with u_transpose * predict)
         x_recovery = np.matmul(predict, x_transform_mat.T) + x_mean
-
-        self.Procedural_mesh.update(x_recovery[0, :].tolist())
-
-        y_recovery = np.matmul(w[t, :], y_transform_mat.T) + y_mean
-        y_list = y_recovery.tolist()
-        # print('y_list: ', y_list)
-        scale = self.scale_factor
-        self.sphere_actor.set_actor_location(FVector(y_list[0]*scale, y_list[1]*scale, y_list[2]*scale))
-
-        self.z_last_2_auto = self.z_last_1_auto
-        self.z_last_1_auto = predict[0,:]
-
-        self.t += 1
-
-    def interactive_move_update(self):
-        scale = self.scale_factor
-        model = self.model
-        x_transform_mat = self.x_transform_mat 
-        x_mean = self.x_mean
-        y_mean = self.y_mean
-        y_transform_mat = self.y_transform_mat 
-        alpha = self.alpha 
-        beta = self.beta 
-        z_t_1 = self.z_init_last_1
-        z_t_2 = self.z_init_last_2
-
-
-        # check whether move or not
-        location = self.sphere_actor.get_actor_location()
-        dist_vec = location - self.sphere_location_last
-        if dist_vec.x ** 2 + dist_vec.y ** 2 + dist_vec.z ** 2 < 0.1:
-            return
-
-        self.sphere_location_last = location
-        real_location = np.array([location.x/scale, location.y/scale, location.z/scale]) 
-        w = real_location.reshape((1,3))
-        sub_w = np.matmul((w - y_mean), y_transform_mat)
-        print('w: ', w)
-
-
-        
-        z_init = alpha * z_t_1 + beta * (z_t_1 - z_t_2)
-        input_data = np.hstack((z_init, z_t_1, sub_w[0,:]))
-        input_batch = np.array([input_data])
-        result = model.predict(input_batch)
-
-        #  predict 2d cause result is 2D
-        predict = z_init + result
-        # convert predict to real vertices(3c), got the matrix U(with u_transpose * predict)
-        x_recovery = np.matmul(predict, x_transform_mat.T) + x_mean
-
-        self.Procedural_mesh.update(x_recovery[0, :].tolist())
-
-        self.z_init_last_2 = self.z_init_last_1
-        self.z_init_last_1 = predict[0,:]
-        
-        print(location)
-         
+        return predict[0,:], x_recovery[0, :]
 
     # stop the simulation 
     def you_pressed_C(self):
